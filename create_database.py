@@ -1,28 +1,20 @@
-# from langchain.document_loaders import DirectoryLoader
-from langchain_community.document_loaders import DirectoryLoader #DirectoryLoader: Loads all files from a folder (like your books).
-#from langchain.text_splitter import RecursiveCharacterTextSplitter #Splits big text into smaller overlapping chunks.
+from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-#from langchain.schema import Document #langchain.schema = rules and structures that define how data looks in LangChain.
 from langchain_core.documents import Document 
-# from langchain.embeddings import OpenAIEmbeddings
-from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma 
-#langchain_community.vectorstores = collection of vector database wrappers that let you store & search embeddings.
-#chroma is a vector database where you store embeddings and later search them.
-import openai 
-from dotenv import load_dotenv
+import json
 import os
 import shutil #shutil: Used here to delete directories (to reset the DB).
+from rag_utils import (
+    LOCAL_STORE_PATH,
+    get_embeddings,
+    load_environment,
+    save_embedding_config,
+)
 
-# Load environment variables. Assumes that project contains .env file with API keys
-load_dotenv()
-#---- Set OpenAI API key 
-# Change environment variable name from "OPENAI_API_KEY" to the name given in 
-# your .env file.
-openai.api_key = os.environ['OPENAI_API_KEY']
+load_environment()
 
-DATA_PATH = "data/books" # this is our input books/texts given or retrived 
+DATA_PATH = "data" # this is our input books/texts given or retrived 
 CHROMA_PATH = "chroma" # this is ordered/ embedded/ chunked data/books
 
 
@@ -37,13 +29,10 @@ def generate_data_store():
 
 
 def load_documents():
-    loader = DirectoryLoader(DATA_PATH, glob="*.md")
-        #Go into data/books and load all .md files (Markdown files - A Markdown file is a simple text file that uses easy formatting symbols to style text.).
+    loader = TextLoader("data/alice_in_wonderland.md")
     documents = loader.load()
-        #each file is converted into a Document object with:
-        #page_content: text
-        #metadata: e.g., filename, path
     return documents
+    
 
 
 def split_text(documents: list[Document]):
@@ -59,12 +48,25 @@ def split_text(documents: list[Document]):
     # and then you check how many chunks we got
 
 
-## it is a debugging step 
-    document = chunks[10]
-    print(document.page_content) # actual text
-    print(document.metadata)    # file, position, etc.
-
     return chunks
+
+
+def save_local_documents(chunks: list[Document]) -> None:
+    LOCAL_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LOCAL_STORE_PATH.write_text(
+        json.dumps(
+            [
+                {
+                    "page_content": chunk.page_content,
+                    "metadata": chunk.metadata,
+                }
+                for chunk in chunks
+            ],
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def save_to_chroma(chunks: list[Document]):
@@ -86,12 +88,26 @@ def save_to_chroma(chunks: list[Document]):
 #  Slow rebuilds
 # Breaks your application
 
-    # Create a new DB from the documents.
-    db = Chroma.from_documents(
-        chunks, OpenAIEmbeddings(), persist_directory=CHROMA_PATH
-    )
-    db.persist() #Saves the vector DB permanently
-    print(f"Saved {len(chunks)} chunks to {CHROMA_PATH}.")
+    embeddings, provider = get_embeddings("auto")
+    save_local_documents(chunks)
+    save_embedding_config(provider)
+    if provider == "local":
+        print(
+            f"Saved {len(chunks)} chunks to {LOCAL_STORE_PATH} using local retrieval."
+        )
+        return
+
+    try:
+        Chroma.from_documents(
+            chunks, embeddings, persist_directory=CHROMA_PATH
+        )
+        print(f"Saved {len(chunks)} chunks to {CHROMA_PATH} using {provider} embeddings.")
+    except Exception as exc:
+        save_embedding_config("local")
+        print(
+            "OpenAI vector storage failed, but the local document store was created.\n"
+            f"Reason: {exc}"
+        )
 
 
 if __name__ == "__main__":
