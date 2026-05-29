@@ -1,13 +1,9 @@
 import argparse
-import json
-import math
 import re
-from collections import Counter
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from rag_utils import (
-    LOCAL_STORE_PATH,
     get_chat_model,
     get_embeddings,
     load_environment,
@@ -26,12 +22,27 @@ Answer the question based on the above context: {question}
 """
 
 STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has",
-    "he", "in", "is", "it", "its", "of", "on", "that", "the", "to", "was",
-    "were", "will", "with", "who", "what", "when", "where", "why", "how",
-    "which", "this", "these", "those", "did", "do", "does", "had", "have",
-    "i", "you", "they", "we", "she", "her", "his", "him", "them", "our",
-    "their", "or", "if", "but", "about", "into", "than", "then",
+    # common English
+    "a", "an", "and", "are", "as", "at", "be", "been", "being", "by",
+    "for", "from", "has", "have", "had", "he", "her", "him", "his",
+    "how", "i", "if", "in", "into", "is", "it", "its", "itself",
+    "me", "my", "myself", "no", "not", "of", "off", "on", "or", "our",
+    "out", "she", "so", "some", "than", "that", "the", "their", "them",
+    "then", "there", "these", "they", "this", "those", "to", "too",
+    "up", "us", "was", "we", "were", "what", "when", "where", "which",
+    "while", "who", "will", "with", "you", "your", "but", "about",
+    "also", "just", "did", "do", "does", "would", "could", "should",
+    "than", "both", "each", "any", "all", "few", "more", "most",
+    "other", "such", "only", "own", "same", "again", "further",
+    # company document filler
+    "section", "clause", "article", "paragraph", "document", "policy",
+    "procedure", "guidelines", "handbook", "manual", "agreement",
+    "pursuant", "accordance", "herein", "hereto", "thereof", "thereto",
+    "whereby", "whereas", "aforementioned", "abovementioned",
+    "shall", "may", "must", "please", "note", "refer", "see",
+    "above", "below", "following", "per", "etc", "vs", "re",
+    "effective", "dated", "version", "updated", "revised", "page",
+    "applicable", "relevant", "respective", "provided", "subject",
 }
 
 
@@ -46,94 +57,6 @@ def tokenize(text: str) -> set[str]:
 def sentence_split(text: str) -> list[str]:
     parts = re.split(r"(?<=[.!?])\s+", text.replace("\n", " ").strip())
     return [part.strip() for part in parts if part.strip()]
-
-
-def search_local_documents(db: Chroma, query_text: str, k: int = 3) -> list[Document]:
-    query_tokens = tokenize(query_text)
-    raw_documents = db.get(include=["documents", "metadatas"])
-    documents: list[Document] = []
-    tokenized_documents: list[set[str]] = []
-
-    for page_content, metadata in zip(
-        raw_documents["documents"],
-        raw_documents["metadatas"],
-        strict=False,
-    ):
-        doc = Document(page_content=page_content, metadata=metadata or {})
-        documents.append(doc)
-        tokenized_documents.append(tokenize(page_content))
-
-    document_frequency = Counter()
-    for tokens in tokenized_documents:
-        document_frequency.update(tokens)
-
-    scored_documents: list[tuple[int, Document]] = []
-    total_documents = max(len(documents), 1)
-    for doc, doc_tokens in zip(documents, tokenized_documents, strict=False):
-        overlap = query_tokens & doc_tokens
-        score = 0.0
-        for token in overlap:
-            idf = math.log((1 + total_documents) / (1 + document_frequency[token])) + 1
-            score += idf
-
-        if query_text.lower() in doc.page_content.lower():
-            score += 3.0
-
-        if "alice" in query_tokens and "alice" in doc.page_content.lower():
-            score += 0.5
-
-        scored_documents.append((score, doc))
-
-    scored_documents.sort(
-        key=lambda item: (item[0], -len(item[1].page_content)),
-        reverse=True,
-    )
-    return [doc for score, doc in scored_documents[:k] if score > 0]
-
-
-def load_local_documents() -> list[Document]:
-    if not LOCAL_STORE_PATH.exists():
-        return []
-
-    data = json.loads(LOCAL_STORE_PATH.read_text(encoding="utf-8"))
-    return [
-        Document(page_content=item["page_content"], metadata=item.get("metadata", {}))
-        for item in data
-    ]
-
-
-def search_local_store(query_text: str, k: int = 3) -> list[Document]:
-    documents = load_local_documents()
-    if not documents:
-        return []
-
-    query_tokens = tokenize(query_text)
-    document_frequency = Counter()
-    tokenized_documents: list[set[str]] = []
-    for doc in documents:
-        tokens = tokenize(doc.page_content)
-        tokenized_documents.append(tokens)
-        document_frequency.update(tokens)
-
-    total_documents = max(len(documents), 1)
-    scored_documents: list[tuple[float, Document]] = []
-    for doc, doc_tokens in zip(documents, tokenized_documents, strict=False):
-        overlap = query_tokens & doc_tokens
-        score = 0.0
-        for token in overlap:
-            idf = math.log((1 + total_documents) / (1 + document_frequency[token])) + 1
-            score += idf
-
-        if query_text.lower() in doc.page_content.lower():
-            score += 3.0
-
-        scored_documents.append((score, doc))
-
-    scored_documents.sort(
-        key=lambda item: (item[0], -len(item[1].page_content)),
-        reverse=True,
-    )
-    return [doc for score, doc in scored_documents[:k] if score > 0]
 
 
 def extract_subject_tokens(question: str) -> list[str]:
@@ -169,13 +92,10 @@ def rank_sentences(question: str, sentences: list[str]) -> list[tuple[float, str
         overlap = question_tokens & sentence_tokens
         score = float(len(overlap))
 
-        if sentence.lower().startswith(("alice", "the", "she", "he")):
-            score += 0.2
-
         if question.lower().startswith("who"):
             if any(token in lowered_sentence for token in subject_tokens):
                 score += 1.5
-            if re.search(r"\b(is|was)\b|'s|'s", lowered_sentence):
+            if re.search(r"\b(is|was)\b|'s", lowered_sentence):
                 score += 1.0
 
         if is_speech_question(question) and any(
@@ -213,27 +133,12 @@ def rank_sentences(question: str, sentences: list[str]) -> list[tuple[float, str
     return candidate_sentences
 
 
-def answer_from_context(
-    question: str,
-    documents: list[Document],
-    corpus_documents: list[Document] | None = None,
-) -> str:
+def answer_from_context(question: str, documents: list[Document]) -> str:
     sentence_pool: list[str] = []
     for doc in documents:
         sentence_pool.extend(sentence_split(doc.page_content))
 
     ranked_sentences = rank_sentences(question, sentence_pool)
-
-    if (
-        question.lower().startswith("who")
-        or is_speech_question(question)
-    ) and corpus_documents is not None:
-        full_corpus_sentences: list[str] = []
-        for doc in corpus_documents:
-            full_corpus_sentences.extend(sentence_split(doc.page_content))
-        corpus_ranked = rank_sentences(question, full_corpus_sentences)
-        if corpus_ranked:
-            ranked_sentences = corpus_ranked
 
     if not ranked_sentences:
         return documents[0].page_content.strip()
@@ -265,7 +170,6 @@ def main():
     args = parser.parse_args()
     query_text = args.query_text
 
-    corpus_documents = None
     embedding_function, provider = get_embeddings()
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function)
     results = db.similarity_search(query_text, k=6)
@@ -279,12 +183,12 @@ def main():
 
     model = get_chat_model()
     if model is None:
-        response_text = answer_from_context(query_text, results, corpus_documents)
+        response_text = answer_from_context(query_text, results)
     else:
         try:
             response_text = model.invoke(prompt).content
         except Exception:
-            response_text = answer_from_context(query_text, results, corpus_documents)
+            response_text = answer_from_context(query_text, results)
 
     sources = [doc.metadata.get("source", None) for doc in results]
     formatted_response = f"Response: {response_text}\nSources: {sources}"

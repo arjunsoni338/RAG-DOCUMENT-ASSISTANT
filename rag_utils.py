@@ -7,7 +7,6 @@ from langchain_openai import ChatOpenAI
 
 CHROMA_PATH = Path("chroma")
 EMBEDDING_CONFIG_PATH = CHROMA_PATH / "embedding_config.json"
-LOCAL_STORE_PATH = CHROMA_PATH / "documents.json"
 HF_MODEL_NAME = "all-MiniLM-L6-v2"
 
 def load_environment() -> None:
@@ -16,7 +15,7 @@ def load_environment() -> None:
 def _build_hf_embeddings() -> HuggingFaceEmbeddings:
     return HuggingFaceEmbeddings(model_name=HF_MODEL_NAME)
 
-def get_embeddings(provider: str = "auto"):
+def get_embeddings():
     load_environment()
     return _build_hf_embeddings(), "huggingface"
 
@@ -38,9 +37,3 @@ def save_embedding_config(provider: str) -> None:
         json.dumps({"provider": provider}, indent=2),
         encoding="utf-8",
     )
-
-def load_embedding_provider(default: str = "auto") -> str:
-    if not EMBEDDING_CONFIG_PATH.exists():
-        return default
-    data = json.loads(EMBEDDING_CONFIG_PATH.read_text(encoding="utf-8"))
-    return data.get("provider", default)

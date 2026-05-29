@@ -1,5 +1,6 @@
 langchain
 langchain-community
+langchain-classic
 langchain-huggingface
 langchain-openai
 langchain-text-splitters
