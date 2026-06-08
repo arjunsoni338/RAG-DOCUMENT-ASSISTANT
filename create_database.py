@@ -29,7 +29,7 @@ def generate_data_store():
 
 def load_documents():
     documents = []
-    for file in Path(DATA_PATH).iterdir():
+    for file in Path(DATA_PATH).rglob("*.md"):
         if file.is_file():
             documents.extend(TextLoader(str(file)).load())
     return documents
