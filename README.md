@@ -1,8 +1,8 @@
-# GitLab Knowledge Base — Question Answering Assistant
+# Company Knowledge Base — Question Answering Assistant
 
-Ask questions about GitLab's company handbook in plain English and get answers that come straight from the actual documents — not made up.
+Ask questions about a set of well-known companies in plain English and get answers that come straight from the actual documents — not made up.
 
-You can ask about GitLab's values, mission, communication style, leadership, HR policies, pay, benefits, and more.
+The knowledge base covers **26 companies**. GitLab is included in the most detail — its full public handbook — so you can ask about its values, mission, communication style, leadership, HR policies, pay, and benefits. The other 25 companies each have a profile document you can ask about, covering what they do and their background.
 
 This project is built using **RAG (Retrieval-Augmented Generation)**. That's a fancy name for a simple idea: instead of letting an AI guess an answer from memory, we first *find* the most relevant pieces of the documents, then ask the AI to answer *using only those pieces*. This keeps answers accurate and based on real sources.
 
@@ -26,7 +26,9 @@ If some words below sound technical, here's what they mean in plain language:
 
 ## What's inside the knowledge base
 
-The app already comes loaded with these public GitLab handbook documents:
+The app comes loaded with public information about **26 companies**. Every company lives in its own folder inside `data/`, and `companies.json` keeps a small registry of each one (display name, country, and homepage).
+
+**GitLab** is covered in the most depth — its full public handbook is split across nine topic documents:
 
 | Document | What it covers |
 |----------|----------------|
@@ -40,7 +42,11 @@ The app already comes loaded with these public GitLab handbook documents:
 | `gitlab_benefits.md` | Medical, parental leave, pension, and other perks |
 | `gitlab_people_group.md` | HR teams, contacts, and the employee journey |
 
-Want to add your own documents? Just drop any `.md` file into the `data/` folder and rebuild the database (explained in the steps below).
+The other **25 companies** each have a single profile document (`<company>_profile.md`) covering what the company does, its background, and key facts:
+
+Coforge, CRED, Dream11, Flipkart, Freshworks, HCLTech, Info Edge (Naukri.com), Infosys, InMobi, LTIMindtree, MakeMyTrip, Meesho, Mphasis, Nykaa, Ola, Paytm, Persistent Systems, PhonePe, Razorpay, Swiggy, Tata Consultancy Services (TCS), Tech Mahindra, Wipro, Zoho, and Zomato.
+
+Want to add your own documents? Create a folder inside `data/`, drop any `.md` file into it, and rebuild the database (explained in the steps below).
 
 ---
 
@@ -59,19 +65,25 @@ So you always get answers grounded in the real handbook.
 
 ```
 RAG project/
-├── data/                            # The source documents (add new .md files here)
-│   ├── gitlab_values.md
-│   ├── gitlab_mission.md
-│   ├── gitlab_communication.md
-│   ├── gitlab_leadership.md
-│   ├── gitlab_anti_harassment.md
-│   ├── gitlab_hiring.md
-│   ├── gitlab_compensation.md
-│   ├── gitlab_benefits.md
-│   └── gitlab_people_group.md
+├── data/                            # Source documents — one folder per company
+│   ├── gitlab/                      # GitLab — full handbook (9 topic documents)
+│   │   ├── gitlab_values.md
+│   │   ├── gitlab_mission.md
+│   │   ├── gitlab_communication.md
+│   │   ├── gitlab_leadership.md
+│   │   ├── gitlab_anti_harassment.md
+│   │   ├── gitlab_hiring.md
+│   │   ├── gitlab_compensation.md
+│   │   ├── gitlab_benefits.md
+│   │   └── gitlab_people_group.md
+│   ├── swiggy/                      # Every other company — one profile document
+│   │   └── swiggy_profile.md
+│   └── ...                          # 24 more company folders (26 companies in total)
 ├── chroma/                          # The vector database (created automatically)
+│   ├── chroma.sqlite3
 │   └── embedding_config.json
-├── create_database.py               # Splits and stores all documents from data/
+├── companies.json                   # Registry of companies (name, country, homepage)
+├── create_database.py               # Splits and stores every document under data/
 ├── query_data.py                    # Answers your questions
 ├── compare_embeddings.py            # Compares how similar two words are
 ├── rag_utils.py                     # Shared helpers (embeddings, AI, config)
@@ -160,8 +172,8 @@ python create_database.py
 You should see something like:
 
 ```
-Split 9 documents into 54 chunks.
-Saved 54 chunks to chroma/ using huggingface embeddings.
+Split 34 documents into 188 chunks.
+Saved 188 chunks to chroma using huggingface embeddings.
 ```
 
 ### Step 7 — Ask a question!
@@ -177,8 +189,9 @@ Some more examples you can try:
 ```bash
 python query_data.py "What is GitLab's anti-harassment policy?"
 python query_data.py "How does GitLab handle compensation reviews?"
-python query_data.py "What is GitLab's mission?"
-python query_data.py "How does GitLab approach communication?"
+python query_data.py "What does Razorpay do?"
+python query_data.py "Tell me about Tata Consultancy Services."
+python query_data.py "What is Zomato known for?"
 ```
 
 ### Optional — See the source text behind an answer
