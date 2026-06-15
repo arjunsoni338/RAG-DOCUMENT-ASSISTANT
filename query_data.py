@@ -12,13 +12,31 @@ from rag_utils import (
 CHROMA_PATH = "chroma"
 
 PROMPT_TEMPLATE = """
-Answer the question based only on the following context:
+You are a helpful, knowledgeable assistant that answers questions about companies
+using a knowledge base of source documents.
 
+Answer the question based **only** on the context below. Do **not** use any outside
+knowledge or make assumptions. If the context does not contain the answer, say so
+clearly (for example, "I couldn't find that in the available documents.") and point to
+any closely related information that is present.
+
+Context:
 {context}
 
 ---
 
-Answer the question based on the above context: {question}
+Question: {question}
+
+When you answer:
+- Respond directly and naturally. Do not begin with filler such as "Based on the
+  context" or "According to the documents."
+- Keep it clear, accurate, and concise. Use short paragraphs, and use bullet points
+  when listing several items.
+- Preserve important specifics from the source exactly as written, such as names,
+  numbers, dates, and policy details.
+- Keep the tone professional but approachable.
+
+Answer:
 """
 
 STOPWORDS = {
